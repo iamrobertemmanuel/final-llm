@@ -1,3 +1,5 @@
+Note: This is not a cloned web application this web application contains some inspiration from other creators so as a sign to thank them added thier name as collaborators 
+
 # Local Multimodal AI Chat
 ## Getting Started
 
