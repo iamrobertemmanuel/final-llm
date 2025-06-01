@@ -6,8 +6,7 @@ To get started with Local Multimodal AI Chat, follow these simple steps:
 ### Prerequisites
 
 1. **Python**: Python 3.8 or higher is required
-2. **Ollama**: Install [Ollama](https://ollama.com/download) for your platform
-
+2. **Gemini API**
 ### Installation and Setup
 
 1. **Clone the repository**:
