@@ -27,6 +27,15 @@ from database_operations import (
     DEFAULT_CHUNK_SIZE,
     DEFAULT_CHUNK_OVERLAP
 )
+# vectordb_handler.py
+import os
+__import__('pysqlite3')
+import sys
+sys.modules['sqlite3'] = sys.modules['pysqlite3']
+
+import chromadb
+from langchain.embeddings import OpenAIEmbeddings # Assuming you use OpenAI embeddings
+# ... rest of your code
 import sqlite3
 from auth_handler import show_login_page
 import os

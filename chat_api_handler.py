@@ -7,6 +7,14 @@ import os
 import google.generativeai as genai
 import PIL.Image
 import io
+# vectordb_handler.py
+import os
+__import__('pysqlite3')
+import sys
+sys.modules['sqlite3'] = sys.modules['pysqlite3']
+
+import chromadb
+# ... rest of your imports and code
 
 load_dotenv()
 config = load_config()

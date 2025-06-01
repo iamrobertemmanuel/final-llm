@@ -4,6 +4,7 @@ import sqlite3
 import streamlit as st
 from utils import load_config
 import threading
+import os # Added this import for directory operations
 
 # Constants
 DEFAULT_CHAT_MEMORY_LENGTH = 2
@@ -23,7 +24,14 @@ class DatabaseConnection:
     def connection(self) -> sqlite3.Connection:
         with self._lock:
             if not self._connection:
+                # Ensure the directory for the database file exists before connecting
+                db_dir = os.path.dirname(self.db_path)
+                if db_dir: # Only create directory if a path is specified (not just a filename)
+                    os.makedirs(db_dir, exist_ok=True)
+                
                 self._connection = sqlite3.connect(self.db_path, check_same_thread=False)
+                # It's good practice to set a row_factory for easier data access
+                self._connection.row_factory = sqlite3.Row 
             return self._connection
 
     def close(self) -> None:
@@ -61,7 +69,7 @@ class MessageRepository(BaseRepository):
             conn.commit()
 
     def save_message(self, chat_history_id: str, sender_type: str, 
-                    message_type: str, content: Union[str, bytes]) -> None:
+                     message_type: str, content: Union[str, bytes]) -> None:
         with self.db.connection as conn:
             cursor = conn.cursor()
             if message_type == 'text':
@@ -88,10 +96,10 @@ class MessageRepository(BaseRepository):
             )
             return [
                 {
-                    'message_id': row[0],
-                    'sender_type': row[1],
-                    'message_type': row[2],
-                    'content': row[3] if row[2] == 'text' else row[4]
+                    'message_id': row['message_id'], # Use row as dict due to row_factory
+                    'sender_type': row['sender_type'],
+                    'message_type': row['message_type'],
+                    'content': row['text_content'] if row['message_type'] == 'text' else row['blob_content']
                 }
                 for row in cursor.fetchall()
             ]
@@ -107,12 +115,13 @@ class MessageRepository(BaseRepository):
                 LIMIT ?
             """, (chat_history_id, k))
             
+            # Fetch all and reverse to maintain chronological order
             return [
                 {
-                    'message_id': row[0],
-                    'sender_type': row[1],
-                    'message_type': row[2],
-                    'content': row[3]
+                    'message_id': row['message_id'],
+                    'sender_type': row['sender_type'],
+                    'message_type': row['message_type'],
+                    'content': row['text_content']
                 }
                 for row in reversed(cursor.fetchall())
             ]
@@ -128,7 +137,7 @@ class MessageRepository(BaseRepository):
         with self.db.connection as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT DISTINCT chat_history_id FROM messages ORDER BY chat_history_id ASC")
-            return [row[0] for row in cursor.fetchall()]
+            return [row['chat_history_id'] for row in cursor.fetchall()]
 
 class SettingsRepository(BaseRepository):
     """Handles all settings-related database operations."""
@@ -155,7 +164,7 @@ class SettingsRepository(BaseRepository):
             result = cursor.fetchone()
             
             if result:
-                return result[0]
+                return result['setting_value'] # Use dict-like access
             
             self.update_setting(setting_name, default_value)
             return default_value
@@ -201,5 +210,10 @@ def close_db_manager():
         st.session_state.db_manager = None
 
 if __name__ == "__main__":
-    db_manager = DatabaseManager(config["chat_sessions_database_path"])
-    db_manager.close()
+    # This block is for direct execution of this script, not when imported by app.py
+    # It ensures the database is initialized and then closed properly if run standalone.
+    temp_db_manager = DatabaseManager(config["chat_sessions_database_path"])
+    print(f"Database initialized at: {config['chat_sessions_database_path']}")
+    # You can add some test operations here if needed
+    temp_db_manager.close()
+    print("Database manager closed.")
