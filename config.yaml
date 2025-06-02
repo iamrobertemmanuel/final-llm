@@ -1,5 +1,5 @@
 gemini:
-  api_key: "AIzaSyByHOCjnEjY1cWD7WQfR9WWu3xCfVD4GVc"  # Gemini API key
+  api_key: "AIzaSyDqbHvOJwrCK80sIjCwmubolqw9EL6cU_M"  # Gemini API key
   # Available models to try:
   model: "gemini-2.0-flash"  # Primary model
   vision_model: "gemini-pro-vision"  # For images
