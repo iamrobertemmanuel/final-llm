@@ -1,5 +1,5 @@
 # Local Multimodal AI Chat - Multimodal chat application with Gemini
-# 
+#
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -7,7 +7,7 @@
 #
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
@@ -39,6 +39,7 @@ from langchain.embeddings import OpenAIEmbeddings # Assuming you use OpenAI embe
 import sqlite3
 from auth_handler import show_login_page
 import os
+import shutil # Import shutil for directory operations
 
 config = load_config()
 
@@ -78,11 +79,11 @@ def initialize_session_state():
     # Initialize database manager
     if "db_manager" not in st.session_state:
         st.session_state.db_manager = get_db_manager()
-    
+
     # Initialize session key for chat history
     if "session_key" not in st.session_state:
         st.session_state.session_key = get_timestamp()
-    
+
     if "messages" not in st.session_state:
         st.session_state.messages = []
         # Load messages from database when initializing
@@ -90,10 +91,10 @@ def initialize_session_state():
         stored_messages = db_manager.message_repo.load_messages(st.session_state.session_key)
         if stored_messages:
             st.session_state.messages = [
-                {"role": msg["sender_type"], "content": msg["content"]} 
+                {"role": msg["sender_type"], "content": msg["content"]}
                 for msg in stored_messages if msg["message_type"] == "text"
             ]
-    
+
     if "endpoint_to_use" not in st.session_state:
         st.session_state["endpoint_to_use"] = "gemini"
     if "model_to_use" not in st.session_state:
@@ -114,13 +115,34 @@ def initialize_session_state():
     if "chat_memory_length" not in st.session_state:
         st.session_state["chat_memory_length"] = 4  # Default chat memory length
 
+# --- NEW FUNCTION FOR CLEARING PDF DATA ---
+def clear_pdf_data():
+    """
+    Deletes the ChromaDB directory where PDF embeddings are stored.
+    Also clears the current chat session and forces a UI rerun.
+    """
+    chroma_db_path = "./chroma_db"
+    if os.path.exists(chroma_db_path):
+        try:
+            shutil.rmtree(chroma_db_path)
+            st.success("PDF knowledge base (ChromaDB) cleared successfully!")
+            # Clear current chat messages as they were based on old PDF data
+            st.session_state.messages = []
+            # Force a new chat session to ensure a clean slate after clearing PDF data
+            st.session_state.session_key = get_timestamp()
+            st.rerun() # Rerun to refresh the UI and reflect the cleared state
+        except Exception as e:
+            st.error(f"Error clearing PDF knowledge base: {e}")
+    else:
+        st.info("No PDF knowledge base found to clear.")
+
 def show_chat_interface():
     st.title(f"AI Chat Assistant - Welcome {st.session_state['username']}!")
-    
+
     # Sidebar configuration
     with st.sidebar:
         st.title("Settings")
-        
+
         # Session management
         all_sessions = st.session_state.db_manager.message_repo.get_all_chat_history_ids()
         if all_sessions:
@@ -134,18 +156,23 @@ def show_chat_interface():
                 # Load messages for selected session
                 stored_messages = st.session_state.db_manager.message_repo.load_messages(selected_session)
                 st.session_state.messages = [
-                    {"role": msg["sender_type"], "content": msg["content"]} 
+                    {"role": msg["sender_type"], "content": msg["content"]}
                     for msg in stored_messages if msg["message_type"] == "text"
                 ]
                 st.rerun()
-        
-        # Clear chat history button
+
+        # Clear chat history button (for current session's text chat)
         if st.button("Clear Chat History"):
             db_manager = get_db_manager()
             db_manager.message_repo.delete_chat_history(st.session_state.session_key)
             st.session_state.messages = []
             st.rerun()
-        
+
+        # --- NEW BUTTON FOR CLEARING PDF DATA ---
+        # This button specifically targets the ChromaDB (PDF embeddings)
+        if st.button("Clear PDF Knowledge Base"):
+            clear_pdf_data()
+
         # Endpoint selection
         st.session_state["endpoint_to_use"] = st.selectbox(
             "Select Endpoint",
@@ -169,7 +196,7 @@ def show_chat_interface():
 
         # PDF chat toggle
         st.session_state["pdf_chat"] = st.toggle("PDF Chat Mode", st.session_state["pdf_chat"])
-        
+
         if st.session_state["pdf_chat"]:
             st.session_state["retrieved_documents"] = st.slider(
                 "Number of documents to retrieve",
@@ -177,13 +204,13 @@ def show_chat_interface():
                 max_value=10,
                 value=st.session_state["retrieved_documents"]
             )
-            
+
             pdf_files = st.file_uploader(
                 "Upload PDF files",
                 type="pdf",
                 accept_multiple_files=True
             )
-            
+
             if pdf_files:
                 add_documents_to_db(pdf_files)
 
@@ -207,7 +234,7 @@ def show_chat_interface():
             "text",
             user_input
         )
-        
+
         st.session_state.messages.append({"role": "user", "content": user_input})
         with st.chat_message("user"):
             st.markdown(user_input)
@@ -215,14 +242,19 @@ def show_chat_interface():
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
             image = None
-            
-            # Handle image upload
+
+            # Handle image upload - this part of the code needs review.
+            # `st.file_uploader` within `st.chat_input` block won't work as expected.
+            # File uploader should generally be outside the chat input loop or handled differently.
+            # For multimodal input with chat_input, you typically handle text and then an image separately.
+            # If you intend to pass an image with each user_input, reconsider the UI flow.
+            # For now, I'm leaving it as is, but flagging it.
             uploaded_file = st.file_uploader("Upload an image", type=["jpg", "jpeg", "png"])
             if uploaded_file is not None:
                 image = uploaded_file.read()
 
             llm_answer = ChatAPIHandler.chat(user_input=user_input, chat_history=st.session_state.messages, image=image)
-            
+
             # Save assistant message to database
             db_manager.message_repo.save_message(
                 st.session_state.session_key,
@@ -230,13 +262,13 @@ def show_chat_interface():
                 "text",
                 llm_answer
             )
-            
+
             message_placeholder.markdown(llm_answer)
         st.session_state.messages.append({"role": "assistant", "content": llm_answer})
 
 def main():
     initialize_session_state()
-    
+
     # Show login page if not logged in
     if not st.session_state['logged_in']:
         show_login_page()
